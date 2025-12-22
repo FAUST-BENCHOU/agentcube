@@ -23,11 +23,7 @@ class BuildRuntime:
         self.metadata_service = MetadataService(verbose=verbose)
         self.docker_service = DockerService(verbose=verbose)
 
-    def build(
-        self,
-        workspace_path: Path,
-        **options: Any
-    ) -> Dict[str, Any]:
+    def build(self, workspace_path: Path, **options: Any) -> Dict[str, Any]:
         """
         Build the agent image from the packaged workspace.
 
@@ -57,11 +53,11 @@ class BuildRuntime:
             metadata = self._increment_version(workspace_path, metadata)
 
             # Step 4: Determine build mode
-            build_mode = options.get('build_mode', metadata.build_mode)
+            build_mode = options.get("build_mode", metadata.build_mode)
 
-            if build_mode == 'local':
+            if build_mode == "local":
                 return self._build_local(workspace_path, metadata, options)
-            elif build_mode == 'cloud':
+            elif build_mode == "cloud":
                 return self._build_cloud(workspace_path, metadata, options)
             else:
                 raise ValueError(f"Unsupported build mode: {build_mode}")
@@ -88,7 +84,7 @@ class BuildRuntime:
         if current_version:
             try:
                 # Simple semantic versioning parsing
-                parts = current_version.split('.')
+                parts = current_version.split(".")
                 if len(parts) >= 3:
                     # Increment patch version
                     parts[-1] = str(int(parts[-1]) + 1)
@@ -99,7 +95,9 @@ class BuildRuntime:
             except ValueError:
                 # Fallback if parsing fails
                 new_version = f"{current_version}-1"
-                logger.warning(f"Could not parse version {current_version}, using {new_version}")
+                logger.warning(
+                    f"Could not parse version {current_version}, using {new_version}"
+                )
 
         if self.verbose:
             logger.info(f"Incrementing version: {current_version} -> {new_version}")
@@ -107,7 +105,7 @@ class BuildRuntime:
         # Update metadata
         updates = {"version": new_version}
         self.metadata_service.update_metadata(workspace_path, updates)
-        
+
         # Reload metadata to get the updated object
         return self.metadata_service.load_metadata(workspace_path)
 
@@ -125,10 +123,7 @@ class BuildRuntime:
             logger.debug(f"Build prerequisites validated for: {workspace_path}")
 
     def _build_local(
-        self,
-        workspace_path: Path,
-        metadata,
-        options: Dict[str, Any]
+        self, workspace_path: Path, metadata, options: Dict[str, Any]
     ) -> Dict[str, Any]:
         """Build the image using local Docker."""
         if self.verbose:
@@ -142,31 +137,33 @@ class BuildRuntime:
         build_args = {}
 
         # Add proxy if provided
-        proxy = options.get('proxy')
+        proxy = options.get("proxy")
         if proxy:
-            build_args.update({
-                'http_proxy': proxy,
-                'https_proxy': proxy,
-                'HTTP_PROXY': proxy,
-                'HTTPS_PROXY': proxy
-            })
+            build_args.update(
+                {
+                    "http_proxy": proxy,
+                    "https_proxy": proxy,
+                    "HTTP_PROXY": proxy,
+                    "HTTPS_PROXY": proxy,
+                }
+            )
             if self.verbose:
                 logger.info(f"Using proxy: {proxy}")
 
         # Build the image
         dockerfile_path = workspace_path / "Dockerfile"
-        image_name = metadata.agent_name.lower().replace(' ', '-')
-        
+        image_name = metadata.agent_name.lower().replace(" ", "-")
+
         # Use version from metadata as default tag, fallback to latest
-        default_tag = metadata.version if metadata.version else 'latest'
-        tag = options.get('tag', default_tag)
+        default_tag = metadata.version if metadata.version else "latest"
+        tag = options.get("tag", default_tag)
 
         build_result = self.docker_service.build_image(
             dockerfile_path=dockerfile_path,
             context_path=workspace_path,
             image_name=image_name,
             tag=tag,
-            build_args=build_args
+            build_args=build_args,
         )
 
         # Update metadata with build information
@@ -177,7 +174,7 @@ class BuildRuntime:
             "image_tag": tag,
             "image_size": build_result["image_size"],
             "build_time": build_result["build_time"],
-            "build_mode": "local"
+            "build_mode": "local",
         }
 
         if self.verbose:
@@ -186,10 +183,7 @@ class BuildRuntime:
         return result
 
     def _build_cloud(
-        self,
-        workspace_path: Path,
-        metadata,
-        options: Dict[str, Any]
+        self, workspace_path: Path, metadata, options: Dict[str, Any]
     ) -> Dict[str, Any]:
         """Build the image using cloud services."""
         # TODO: Implement cloud build functionality
@@ -204,7 +198,7 @@ class BuildRuntime:
         workspace_path: Path,
         metadata,
         build_result: Dict[str, str],
-        tag: str = "latest"
+        tag: str = "latest",
     ) -> None:
         """Update metadata with build information."""
         image_info = {
@@ -212,7 +206,7 @@ class BuildRuntime:
             "tag": tag,
             "build_mode": "local",
             "build_size": build_result["image_size"],
-            "build_time": build_result["build_time"]
+            "build_time": build_result["build_time"],
         }
 
         # Update metadata

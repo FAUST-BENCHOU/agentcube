@@ -19,7 +19,9 @@ class AgentMetadata(BaseModel):
     """Pydantic model for agent metadata validation."""
 
     agent_name: str = Field(..., description="Unique name identifying the agent")
-    description: Optional[str] = Field(None, description="Human-readable summary of the agent's purpose")
+    description: Optional[str] = Field(
+        None, description="Human-readable summary of the agent's purpose"
+    )
     language: str = Field("python", description="Programming language used")
     entrypoint: str = Field(..., description="Command to launch the agent")
     port: int = Field(8080, description="Port exposed by the agent runtime")
@@ -27,53 +29,75 @@ class AgentMetadata(BaseModel):
     build_mode: str = Field("local", description="Build strategy: local or cloud")
     region: Optional[str] = Field(None, description="Deployment region")
 
-    version: Optional[str] = Field(None, description="Semantic version string for publishing")
+    version: Optional[str] = Field(
+        None, description="Semantic version string for publishing"
+    )
 
     # Image information (filled during build/publish)
-    image: Optional[Dict[str, Any]] = Field(None, description="Container image information")
+    image: Optional[Dict[str, Any]] = Field(
+        None, description="Container image information"
+    )
 
     # Authentication information
-    auth: Optional[Dict[str, Any]] = Field(None, description="Authentication configuration")
+    auth: Optional[Dict[str, Any]] = Field(
+        None, description="Authentication configuration"
+    )
 
     # Build configuration
-    requirements_file: Optional[str] = Field("requirements.txt", description="Python dependency file")
-    
+    requirements_file: Optional[str] = Field(
+        "requirements.txt", description="Python dependency file"
+    )
+
     # Registry configuration
-    registry_url: Optional[str] = Field("", description="Registry URL for image publishing")
+    registry_url: Optional[str] = Field(
+        "", description="Registry URL for image publishing"
+    )
     registry_username: Optional[str] = Field("", description="Registry username")
     registry_password: Optional[str] = Field("", description="Registry password")
 
     # AgentCube system configuration
     agent_endpoint: Optional[str] = Field(None, description="Agent endpoint URL")
-    workload_manager_url: Optional[str] = Field(None, description="URL for the Workload Manager")
+    workload_manager_url: Optional[str] = Field(
+        None, description="URL for the Workload Manager"
+    )
     router_url: Optional[str] = Field(None, description="URL for the Router")
-    readiness_probe_path: Optional[str] = Field(None, description="Path for the readiness probe")
-    readiness_probe_port: Optional[int] = Field(None, description="Port for the readiness probe")
+    readiness_probe_path: Optional[str] = Field(
+        None, description="Path for the readiness probe"
+    )
+    readiness_probe_port: Optional[int] = Field(
+        None, description="Port for the readiness probe"
+    )
 
     # AgentCube specific fields (filled after publish)
     agent_id: Optional[str] = Field(None, description="Agent ID assigned by AgentCube")
     session_id: Optional[str] = Field(None, description="The session ID for the agent")
 
     # Kubernetes deployment fields (filled when using K8s provider)
-    k8s_deployment: Optional[Dict[str, Any]] = Field(None, description="Kubernetes deployment information")
+    k8s_deployment: Optional[Dict[str, Any]] = Field(
+        None, description="Kubernetes deployment information"
+    )
 
-    @field_validator('language')
+    @field_validator("language")
     @classmethod
     def validate_language(cls, v: str) -> str:
-        supported_languages = ['python', 'java']
+        supported_languages = ["python", "java"]
         if v.lower() not in supported_languages:
-            raise ValueError(f"Language '{v}' is not supported. Supported languages: {supported_languages}")
+            raise ValueError(
+                f"Language '{v}' is not supported. Supported languages: {supported_languages}"
+            )
         return v.lower()
 
-    @field_validator('build_mode')
+    @field_validator("build_mode")
     @classmethod
     def validate_build_mode(cls, v: str) -> str:
-        supported_modes = ['local', 'cloud']
+        supported_modes = ["local", "cloud"]
         if v.lower() not in supported_modes:
-            raise ValueError(f"Build mode '{v}' is not supported. Supported modes: {supported_modes}")
+            raise ValueError(
+                f"Build mode '{v}' is not supported. Supported modes: {supported_modes}"
+            )
         return v.lower()
 
-    @field_validator('port')
+    @field_validator("port")
     @classmethod
     def validate_port(cls, v: int) -> int:
         if not (1 <= v <= 65535):
@@ -122,7 +146,7 @@ class MetadataService:
             logger.debug(f"Loading metadata from: {metadata_file}")
 
         try:
-            with open(metadata_file, 'r', encoding='utf-8') as f:
+            with open(metadata_file, "r", encoding="utf-8") as f:
                 metadata_dict = yaml.safe_load(f) or {}
 
             return AgentMetadata(**metadata_dict)
@@ -147,13 +171,13 @@ class MetadataService:
 
         metadata_dict = metadata.model_dump(exclude_none=True)
 
-        with open(metadata_file, 'w', encoding='utf-8') as f:
-            yaml.dump(metadata_dict, f, default_flow_style=False, indent=2, sort_keys=False)
+        with open(metadata_file, "w", encoding="utf-8") as f:
+            yaml.dump(
+                metadata_dict, f, default_flow_style=False, indent=2, sort_keys=False
+            )
 
     def update_metadata(
-        self,
-        workspace_path: Path,
-        updates: Dict[str, Any]
+        self, workspace_path: Path, updates: Dict[str, Any]
     ) -> AgentMetadata:
         """
         Update metadata with new values.
@@ -215,12 +239,18 @@ class MetadataService:
 
         return True
 
-    def _validate_python_workspace(self, workspace_path: Path, metadata: AgentMetadata) -> None:
+    def _validate_python_workspace(
+        self, workspace_path: Path, metadata: AgentMetadata
+    ) -> None:
         """Validate Python workspace structure."""
         # Check for entrypoint file
         entrypoint_parts = metadata.entrypoint.split()
         if entrypoint_parts[0] == "python":
-            entrypoint_file = workspace_path / entrypoint_parts[1] if len(entrypoint_parts) > 1 else workspace_path / "main.py"
+            entrypoint_file = (
+                workspace_path / entrypoint_parts[1]
+                if len(entrypoint_parts) > 1
+                else workspace_path / "main.py"
+            )
             if not entrypoint_file.exists():
                 raise ValueError(f"Entrypoint file not found: {entrypoint_file}")
 
@@ -230,7 +260,9 @@ class MetadataService:
             if not requirements_file.exists():
                 raise ValueError(f"Requirements file not found: {requirements_file}")
 
-    def _validate_java_workspace(self, workspace_path: Path, metadata: AgentMetadata) -> None:
+    def _validate_java_workspace(
+        self, workspace_path: Path, metadata: AgentMetadata
+    ) -> None:
         """Validate Java workspace structure."""
         # Check for pom.xml
         pom_file = workspace_path / "pom.xml"

@@ -9,6 +9,7 @@ import logging
 import os
 import shlex
 from typing import Any, Dict, Optional
+
 from kubernetes import client, config
 from kubernetes.client.rest import ApiException
 
@@ -22,7 +23,7 @@ class AgentCubeProvider:
         self,
         namespace: str = "default",
         verbose: bool = False,
-        kubeconfig: Optional[str] = None
+        kubeconfig: Optional[str] = None,
     ) -> None:
         """
         Initialize AgentCube provider.
@@ -58,10 +59,14 @@ class AgentCubeProvider:
             self.custom_api = client.CustomObjectsApi()
 
             if self.verbose:
-                logger.info(f"AgentCube provider initialized for namespace: {namespace}")
+                logger.info(
+                    f"AgentCube provider initialized for namespace: {namespace}"
+                )
 
         except Exception as e:
-            raise RuntimeError(f"Failed to initialize Kubernetes client for AgentCubeProvider: {str(e)}")
+            raise RuntimeError(
+                f"Failed to initialize Kubernetes client for AgentCubeProvider: {str(e)}"
+            )
 
         # Ensure namespace exists
         self._ensure_namespace()
@@ -133,7 +138,7 @@ class AgentCubeProvider:
                     "port": readiness_probe_port,
                 },
                 "initialDelaySeconds": 3,
-            }
+            },
         }
 
         if entrypoint:
@@ -168,26 +173,20 @@ class AgentCubeProvider:
             "metadata": {
                 "name": k8s_name,
                 "namespace": self.namespace,
-                "labels": {"app": k8s_name}
+                "labels": {"app": k8s_name},
             },
             "spec": {
-                "targetPort": [
-                    {
-                        "port": port,
-                        "protocol": "HTTP",
-                        "pathPrefix": "/"
-                    }
-                ],
+                "targetPort": [{"port": port, "protocol": "HTTP", "pathPrefix": "/"}],
                 "podTemplate": {
                     "spec": {
                         "containers": [container],
                         "restartPolicy": "Always",
-                        "imagePullSecrets": [{"name": "default-secret"}]
+                        "imagePullSecrets": [{"name": "default-secret"}],
                     }
                 },
                 "sessionTimeout": "15m",
-                "maxSessionDuration": "8h"
-            }
+                "maxSessionDuration": "8h",
+            },
         }
 
         logger.info(f"Deploying AgentRuntime to K8s cluster: {agent_runtime}")
@@ -200,7 +199,7 @@ class AgentCubeProvider:
                     version=version,
                     namespace=self.namespace,
                     plural=plural,
-                    name=k8s_name
+                    name=k8s_name,
                 )
                 # Update existing CR
                 self.custom_api.patch_namespaced_custom_object(
@@ -209,11 +208,11 @@ class AgentCubeProvider:
                     namespace=self.namespace,
                     plural=plural,
                     name=k8s_name,
-                    body=agent_runtime
+                    body=agent_runtime,
                 )
                 if self.verbose:
                     logger.info(f"Updated existing AgentRuntime: {k8s_name}")
-                
+
             except ApiException as e:
                 if e.status == 404:
                     # Create new CR
@@ -222,7 +221,7 @@ class AgentCubeProvider:
                         version=version,
                         namespace=self.namespace,
                         plural=plural,
-                        body=agent_runtime
+                        body=agent_runtime,
                     )
                     if self.verbose:
                         logger.info(f"Created new AgentRuntime: {k8s_name}")
@@ -233,7 +232,7 @@ class AgentCubeProvider:
                 "deployment_name": k8s_name,
                 "namespace": self.namespace,
                 "status": "deployed",
-                "type": "AgentRuntime"
+                "type": "AgentRuntime",
             }
 
         except Exception as e:
@@ -302,13 +301,15 @@ class AgentCubeProvider:
                 version=version,
                 name=name,
                 namespace=namespace,
-                plural=plural
+                plural=plural,
             )
             return cr
         except ApiException as e:
             if e.status == 404:
                 if self.verbose:
-                    logger.debug(f"AgentRuntime CR '{name}' not found in namespace '{namespace}'.")
+                    logger.debug(
+                        f"AgentRuntime CR '{name}' not found in namespace '{namespace}'."
+                    )
                 return None
             else:
                 logger.error(f"Error fetching AgentRuntime CR '{name}': {e}")

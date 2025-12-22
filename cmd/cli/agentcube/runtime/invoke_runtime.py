@@ -8,11 +8,11 @@ the invocation of published agents via AgentCube.
 import asyncio
 import logging
 from pathlib import Path
-from typing import Tuple, Any, Dict, Optional
+from typing import Any, Dict, Optional, Tuple
 
-from agentcube.services.metadata_service import MetadataService
-from agentcube.services.k8s_provider import KubernetesProvider
 from agentcube.services.agentcube_provider import AgentCubeProvider
+from agentcube.services.k8s_provider import KubernetesProvider
+from agentcube.services.metadata_service import MetadataService
 
 logger = logging.getLogger(__name__)
 
@@ -24,10 +24,10 @@ class InvokeRuntime:
         self.verbose = verbose
         self.provider = provider
         self.metadata_service = MetadataService(verbose=verbose)
-        
+
         # Providers for K8s deployments
-        self.agentcube_provider = None         # For agentcube provider (CRD)
-        self.k8s_provider = None    # For k8s provider (Deployment/Service)
+        self.agentcube_provider = None  # For agentcube provider (CRD)
+        self.k8s_provider = None  # For k8s provider (Deployment/Service)
 
         if provider == "agentcube":
             try:
@@ -47,7 +47,7 @@ class InvokeRuntime:
         self,
         workspace_path: Path,
         payload: Dict[str, Any],
-        headers: Optional[Dict[str, str]] = None
+        headers: Optional[Dict[str, str]] = None,
     ) -> Any:
         """
         Invoke a published agent.
@@ -67,19 +67,26 @@ class InvokeRuntime:
             logger.info(f"Starting agent invocation for workspace: {workspace_path}")
 
         # Step 1: Load metadata and validate agent is published
-        metadata, agent_id, base_endpoint = self._validate_invoke_prerequisites(workspace_path)
+        metadata, agent_id, base_endpoint = self._validate_invoke_prerequisites(
+            workspace_path
+        )
 
         # Determine final endpoint based on deployment type
         final_endpoint = base_endpoint
-        if metadata.k8s_deployment and metadata.k8s_deployment.get("type") == "AgentRuntime":
+        if (
+            metadata.k8s_deployment
+            and metadata.k8s_deployment.get("type") == "AgentRuntime"
+        ):
             namespace = metadata.k8s_deployment.get("namespace", "default")
             agent_name = metadata.agent_name
             # Ensure base_endpoint doesn't have trailing slash
             base = base_endpoint.rstrip("/")
             final_endpoint = f"{base}/v1/namespaces/{namespace}/agent-runtimes/{agent_name}/invocations/"
-            
+
             if self.verbose:
-                logger.info(f"Constructed AgentRuntime invocation URL: {final_endpoint}")
+                logger.info(
+                    f"Constructed AgentRuntime invocation URL: {final_endpoint}"
+                )
 
         # Add session ID to headers if it exists
         if metadata.session_id:
@@ -88,20 +95,24 @@ class InvokeRuntime:
             headers["X-Agentcube-Session-Id"] = metadata.session_id
 
         # Step 2: Invoke the agent
-        response = asyncio.run(self._invoke_agent_via_agentcube(
-            agent_id=agent_id,
-            payload=payload,
-            headers=headers,
-            endpoint=final_endpoint,
-            workspace_path=workspace_path
-        ))
+        response = asyncio.run(
+            self._invoke_agent_via_agentcube(
+                agent_id=agent_id,
+                payload=payload,
+                headers=headers,
+                endpoint=final_endpoint,
+                workspace_path=workspace_path,
+            )
+        )
 
         if self.verbose:
             logger.info(f"Agent invoked successfully: {agent_id}")
 
         return response
 
-    def _validate_invoke_prerequisites(self, workspace_path: Path) -> Tuple[Any, str, str]:
+    def _validate_invoke_prerequisites(
+        self, workspace_path: Path
+    ) -> Tuple[Any, str, str]:
         """Validate that the workspace is ready for invocation."""
         # Load metadata
         metadata = self.metadata_service.load_metadata(workspace_path)
@@ -114,7 +125,7 @@ class InvokeRuntime:
             )
 
         endpoint = metadata.agent_endpoint
-        
+
         if not endpoint:
             raise ValueError(
                 "Agent endpoint is not available in metadata. "
@@ -122,7 +133,9 @@ class InvokeRuntime:
             )
 
         if self.verbose:
-            logger.debug(f"Invocation prerequisites validated: agent_id={agent_id}, endpoint={endpoint}")
+            logger.debug(
+                f"Invocation prerequisites validated: agent_id={agent_id}, endpoint={endpoint}"
+            )
 
         return metadata, agent_id, endpoint
 
@@ -132,7 +145,7 @@ class InvokeRuntime:
         payload: Dict[str, Any],
         headers: Optional[Dict[str, str]],
         endpoint: str,
-        workspace_path: Path
+        workspace_path: Path,
     ) -> Any:
         """Invoke the agent via AgentCube API."""
         if self.verbose:
@@ -141,7 +154,9 @@ class InvokeRuntime:
         try:
             # Try direct HTTP invocation first (for local testing)
             if endpoint.startswith("http"):
-                response = await self._direct_http_invocation(endpoint, payload, headers, workspace_path)
+                response = await self._direct_http_invocation(
+                    endpoint, payload, headers, workspace_path
+                )
 
             return response
 
@@ -153,7 +168,7 @@ class InvokeRuntime:
         endpoint: str,
         payload: Dict[str, Any],
         headers: Optional[Dict[str, str]],
-        workspace_path: Path
+        workspace_path: Path,
     ) -> Dict[str, Any]:
         """Perform direct HTTP invocation of the agent."""
         import httpx
@@ -166,27 +181,27 @@ class InvokeRuntime:
         try:
             # Increase timeout for long-running agent tasks
             timeout = httpx.Timeout(
-                connect=10.0,      # 10 seconds to connect
-                read=300.0,        # 5 minutes to read response (agent processing)
-                write=10.0,        # 10 seconds to write request
-                pool=10.0          # 10 seconds to acquire connection from pool
+                connect=10.0,  # 10 seconds to connect
+                read=300.0,  # 5 minutes to read response (agent processing)
+                write=10.0,  # 10 seconds to write request
+                pool=10.0,  # 10 seconds to acquire connection from pool
             )
-            
+
             async with httpx.AsyncClient(timeout=timeout) as client:
                 if self.verbose:
                     logger.info(f"Making HTTP POST request to {endpoint}")
 
                 response = await client.post(
-                    endpoint,
-                    json=payload,
-                    headers=request_headers
+                    endpoint, json=payload, headers=request_headers
                 )
                 response.raise_for_status()
 
                 # Save session ID from response header
                 if "X-Agentcube-Session-Id" in response.headers:
                     session_id = response.headers["X-Agentcube-Session-Id"]
-                    self.metadata_service.update_metadata(workspace_path, {"session_id": session_id})
+                    self.metadata_service.update_metadata(
+                        workspace_path, {"session_id": session_id}
+                    )
 
                 # Try to parse JSON response
                 try:
@@ -196,7 +211,7 @@ class InvokeRuntime:
                     return {
                         "response": response.text,
                         "status_code": response.status_code,
-                        "headers": dict(response.headers)
+                        "headers": dict(response.headers),
                     }
 
         except httpx.TimeoutException as e:
@@ -206,13 +221,17 @@ class InvokeRuntime:
 
         except httpx.ConnectError as e:
             if self.verbose:
-                logger.error(f"Could not connect to {endpoint}. Please check if the agent is running and the endpoint is correct.")
+                logger.error(
+                    f"Could not connect to {endpoint}. Please check if the agent is running and the endpoint is correct."
+                )
             raise RuntimeError(f"Could not connect to agent at {endpoint}: {e}")
 
         except httpx.HTTPStatusError as e:
             if self.verbose:
                 logger.error(f"HTTP error from {endpoint}: {e.response.status_code}")
-            raise RuntimeError(f"Agent returned error {e.response.status_code}: {e.response.text}")
+            raise RuntimeError(
+                f"Agent returned error {e.response.status_code}: {e.response.text}"
+            )
 
         except Exception as e:
             raise RuntimeError(f"HTTP invocation failed: {str(e)}")

@@ -1,22 +1,23 @@
 from agentcube import CodeInterpreterClient
 
+
 def main():
     """
     This example demonstrates the basic usage of the AgentCube Python SDK.
     It requires a running AgentCube environment.
-    
+
     Ensure the following environment variables are set before running:
     - WORKLOAD_MANAGER_URL: URL of the WorkloadManager service
     - ROUTER_URL: URL of the Router service
     - API_TOKEN: (Optional) Authentication token if required
     """
-    
+
     # specific configuration can be passed directly or via environment variables
     # workload_manager_url = os.getenv("WORKLOAD_MANAGER_URL", "http://localhost:8080")
     # router_url = os.getenv("ROUTER_URL", "http://localhost:8080")
 
     print("Initializing AgentCube Client...")
-    
+
     try:
         # Using context manager ensures the session is cleaned up (deleted) after use
         with CodeInterpreterClient(verbose=True) as client:
@@ -42,19 +43,19 @@ def main():
 
             # 3. File Operations
             print("\n--- 4. File Operations ---")
-            
+
             # Write a file to the remote sandbox
             remote_filename = "hello_agentcube.txt"
             content = "Hello from AgentCube SDK Example!"
             print(f"Writing to '{remote_filename}'...")
             client.write_file(content, remote_filename)
-            
+
             # Verify file creation by listing files
             print("Listing files in current directory...")
             files = client.list_files(".")
             for f in files:
                 print(f" - {f['name']} ({f['size']} bytes)")
-                
+
             # Read the file back (using cat for simplicity)
             print(f"Reading '{remote_filename}' content...")
             output = client.execute_command(f"cat {remote_filename}")
@@ -62,8 +63,9 @@ def main():
 
     except Exception as e:
         print(f"\nAn error occurred: {e}")
-        # Note: If an exception occurs within the 'with' block, 
+        # Note: If an exception occurs within the 'with' block,
         # the __exit__ method is still called, ensuring cleanup.
+
 
 if __name__ == "__main__":
     main()
