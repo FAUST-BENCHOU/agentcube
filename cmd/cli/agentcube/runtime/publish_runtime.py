@@ -9,10 +9,10 @@ import logging
 from pathlib import Path
 from typing import Any, Dict
 
-from agentcube.services.docker_service import DockerService
-from agentcube.services.metadata_service import MetadataService
-from agentcube.services.k8s_provider import KubernetesProvider
 from agentcube.services.agentcube_provider import AgentCubeProvider
+from agentcube.services.docker_service import DockerService
+from agentcube.services.k8s_provider import KubernetesProvider
+from agentcube.services.metadata_service import MetadataService
 
 logger = logging.getLogger(__name__)
 
@@ -25,19 +25,15 @@ class PublishRuntime:
         self.provider = provider
         self.metadata_service = MetadataService(verbose=verbose)
         self.docker_service = DockerService(verbose=verbose)
-        
+
         # Providers for K8s deployments
-        self.agentcube_provider = None         # For agentcube provider (CRD)
-        self.k8s_provider = None    # For k8s provider (Deployment/Service)
+        self.agentcube_provider = None  # For agentcube provider (CRD)
+        self.k8s_provider = None  # For k8s provider (Deployment/Service)
 
         if self.verbose:
             logging.basicConfig(level=logging.DEBUG)
 
-    def publish(
-        self,
-        workspace_path: Path,
-        **options: Any
-    ) -> Dict[str, Any]:
+    def publish(self, workspace_path: Path, **options: Any) -> Dict[str, Any]:
         """
         Publish the agent to AgentCube or K8s cluster.
 
@@ -53,9 +49,9 @@ class PublishRuntime:
         """
         if self.verbose:
             logger.info(f"Starting publish process for workspace: {workspace_path}")
-            
-        provider = options.get('provider', self.provider)
-        namespace = str(options.get('namespace', 'default'))
+
+        provider = options.get("provider", self.provider)
+        namespace = str(options.get("namespace", "default"))
 
         # Load metadata early to prepare image
         metadata = self.metadata_service.load_metadata(workspace_path)
@@ -70,38 +66,43 @@ class PublishRuntime:
 
         if provider == "agentcube":
             if not metadata.router_url or not metadata.workload_manager_url:
-                 raise ValueError(
+                raise ValueError(
                     "Missing required configuration for AgentCube provider. "
                     "Please ensure 'router_url' and 'workload_manager_url' are set in agent_metadata.yaml."
                 )
-        
+
         # Determine the final image URL for deployment, potentially pushing it
         # This will handle the logic of using metadata registry or explicit --image-url
-        final_image_url = self._prepare_image_for_publishing(workspace_path, metadata, options)
-        
+        final_image_url = self._prepare_image_for_publishing(
+            workspace_path, metadata, options
+        )
+
         # Override options['image_url'] with the resolved final_image_url
-        options['image_url'] = final_image_url
+        options["image_url"] = final_image_url
 
         if provider == "agentcube":
             try:
-                self.agentcube_provider = AgentCubeProvider(verbose=self.verbose, namespace=namespace)
+                self.agentcube_provider = AgentCubeProvider(
+                    verbose=self.verbose, namespace=namespace
+                )
             except Exception as e:
                 logger.warning(f"Failed to initialize AgentCube provider for CRD: {e}")
             return self._publish_cr_to_k8s(workspace_path, metadata, **options)
         elif provider == "k8s":
             try:
-                self.k8s_provider = KubernetesProvider(verbose=self.verbose, namespace=namespace)
+                self.k8s_provider = KubernetesProvider(
+                    verbose=self.verbose, namespace=namespace
+                )
             except Exception as e:
                 logger.warning(f"Failed to initialize standard K8s provider: {e}")
             return self._publish_k8s(workspace_path, metadata, **options)
         else:
-            raise ValueError(f"Unsupported provider: {provider}. Supported providers are 'agentcube' and 'k8s'.")
+            raise ValueError(
+                f"Unsupported provider: {provider}. Supported providers are 'agentcube' and 'k8s'."
+            )
 
     def _publish_cr_to_k8s(
-        self,
-        workspace_path: Path,
-        metadata,
-        **options: Any
+        self, workspace_path: Path, metadata, **options: Any
     ) -> Dict[str, Any]:
         """
         Publish the agent to Kubernetes cluster using AgentRuntime CR.
@@ -118,7 +119,9 @@ class PublishRuntime:
             ValueError: If publish fails
         """
         if self.verbose:
-            logger.info(f"Publishing to K8s cluster (AgentRuntime CR) for workspace: {workspace_path}")
+            logger.info(
+                f"Publishing to K8s cluster (AgentRuntime CR) for workspace: {workspace_path}"
+            )
 
         if not self.agentcube_provider:
             raise RuntimeError(
@@ -126,7 +129,7 @@ class PublishRuntime:
             )
 
         # Image URL is already resolved in publish()
-        image_url = options.get('image_url')
+        image_url = options.get("image_url")
         if not image_url:
             raise ValueError("Image URL must be provided or configured in metadata.")
 
@@ -143,11 +146,11 @@ class PublishRuntime:
                 image_url=image_url,
                 port=metadata.port,
                 entrypoint=metadata.entrypoint,
-                env_vars=options.get('env_vars', None),
+                env_vars=options.get("env_vars", None),
                 workload_manager_url=metadata.workload_manager_url,
                 router_url=metadata.router_url,
                 readiness_probe_path=metadata.readiness_probe_path,
-                readiness_probe_port=metadata.readiness_probe_port
+                readiness_probe_port=metadata.readiness_probe_port,
             )
         except Exception as e:
             raise RuntimeError(f"Failed to deploy AgentRuntime CR to K8s: {str(e)}")
@@ -158,11 +161,11 @@ class PublishRuntime:
             "k8s_deployment": {
                 **k8s_info,
                 "type": "AgentRuntime",
-            }
+            },
         }
 
         # Use provided endpoint or fall back to router_url from metadata
-        endpoint = options.get('agent_endpoint') or metadata.agent_endpoint
+        endpoint = options.get("agent_endpoint") or metadata.agent_endpoint
         if not endpoint:
             raise ValueError("Please enter the endpoint for the agent")
 
@@ -176,17 +179,14 @@ class PublishRuntime:
             "status": "deployed",
             "agent_endpoint": endpoint,
         }
-        
+
         if self.verbose:
             logger.info(f"K8s publish (AgentRuntime CR) completed: {result}")
 
         return result
 
     def _publish_k8s(
-        self,
-        workspace_path: Path,
-        metadata,
-        **options: Any
+        self, workspace_path: Path, metadata, **options: Any
     ) -> Dict[str, Any]:
         """
         Publish the agent to local Kubernetes cluster using standard Deployment/Service.
@@ -203,7 +203,9 @@ class PublishRuntime:
             ValueError: If publish fails
         """
         if self.verbose:
-            logger.info(f"Publishing to K8s cluster (standard Deployment/Service) for workspace: {workspace_path}")
+            logger.info(
+                f"Publishing to K8s cluster (standard Deployment/Service) for workspace: {workspace_path}"
+            )
 
         if not self.k8s_provider:
             raise RuntimeError(
@@ -211,7 +213,7 @@ class PublishRuntime:
             )
 
         # Image URL is already resolved in publish()
-        image_url = options.get('image_url')
+        image_url = options.get("image_url")
         if not image_url:
             raise ValueError("Image URL must be provided or configured in metadata.")
 
@@ -223,9 +225,9 @@ class PublishRuntime:
                 image_url=image_url,
                 port=metadata.port,
                 entrypoint=metadata.entrypoint,
-                replicas=options.get('replicas', 1),
-                node_port=options.get('node_port', None),
-                env_vars=options.get('env_vars', None)
+                replicas=options.get("replicas", 1),
+                node_port=options.get("node_port", None),
+                env_vars=options.get("env_vars", None),
             )
 
             # Step 4: Update metadata with K8s deployment information (after creation, before readiness check)
@@ -233,47 +235,42 @@ class PublishRuntime:
             updates = {
                 "agent_id": k8s_info["deployment_name"],
                 "agent_endpoint": k8s_info["service_url"],
-                "k8s_deployment": {
-                    **k8s_info,
-                    "status": "creating"
-                }
+                "k8s_deployment": {**k8s_info, "status": "creating"},
             }
             self.metadata_service.update_metadata(workspace_path, updates)
-            
+
             # --- Start readiness check ---
             if self.verbose:
-                logger.info(f"Waiting for deployment '{k8s_info['deployment_name']}' to become ready...")
-            
+                logger.info(
+                    f"Waiting for deployment '{k8s_info['deployment_name']}' to become ready..."
+                )
+
             final_status = "failed"
             try:
-                self.k8s_provider.wait_for_deployment_ready(k8s_info['deployment_name'], timeout=120)
+                self.k8s_provider.wait_for_deployment_ready(
+                    k8s_info["deployment_name"], timeout=120
+                )
                 final_status = "deployed"
             except Exception as e:
                 error_message = str(e)
-                logger.error(f"Deployment '{k8s_info['deployment_name']}' failed readiness check: {error_message}")
+                logger.error(
+                    f"Deployment '{k8s_info['deployment_name']}' failed readiness check: {error_message}"
+                )
                 updates = {
                     "k8s_deployment": {
                         **k8s_info,
                         "status": final_status,
-                        "error": error_message
+                        "error": error_message,
                     }
                 }
                 self.metadata_service.update_metadata(workspace_path, updates)
                 raise RuntimeError(f"Failed to deploy to standard K8s: {error_message}")
-            
+
             # If readiness succeeds, update metadata with success status
-            updates = {
-                "k8s_deployment": {
-                    **k8s_info,
-                    "status": final_status
-                }
-            }
+            updates = {"k8s_deployment": {**k8s_info, "status": final_status}}
             self.metadata_service.update_metadata(workspace_path, updates)
 
-            result = {
-                **k8s_info,
-                "status": final_status
-            }
+            result = {**k8s_info, "status": final_status}
 
             if self.verbose:
                 logger.info(f"Standard K8s publish completed: {result}")
@@ -282,7 +279,9 @@ class PublishRuntime:
 
         except Exception as e:
             error_message = str(e)
-            logger.error(f"Failed to create standard K8s resources for {metadata.agent_name}: {error_message}")
+            logger.error(
+                f"Failed to create standard K8s resources for {metadata.agent_name}: {error_message}"
+            )
             if k8s_info:
                 updates = {
                     "agent_id": k8s_info.get("deployment_name", metadata.agent_name),
@@ -290,33 +289,27 @@ class PublishRuntime:
                     "k8s_deployment": {
                         **k8s_info,
                         "status": "failed",
-                        "error": error_message
-                    }
+                        "error": error_message,
+                    },
                 }
                 self.metadata_service.update_metadata(workspace_path, updates)
             raise RuntimeError(f"Failed to deploy to standard K8s: {error_message}")
 
     def _prepare_image_for_publishing(
-        self,
-        workspace_path: Path,
-        metadata,
-        options: Dict[str, Any]
+        self, workspace_path: Path, metadata, options: Dict[str, Any]
     ) -> str:
         """Prepare the container image for publishing."""
-        build_mode = options.get('build_mode', metadata.build_mode)
+        build_mode = options.get("build_mode", metadata.build_mode)
 
-        if build_mode == 'local':
+        if build_mode == "local":
             return self._prepare_local_image(workspace_path, metadata, options)
-        elif build_mode == 'cloud':
+        elif build_mode == "cloud":
             return self._prepare_cloud_image(workspace_path, metadata, options)
         else:
             raise ValueError(f"Unsupported build mode for publishing: {build_mode}")
 
     def _prepare_local_image(
-        self,
-        workspace_path: Path,
-        metadata,
-        options: Dict[str, Any]
+        self, workspace_path: Path, metadata, options: Dict[str, Any]
     ) -> str:
         """Prepare locally built image for publishing."""
         if self.verbose:
@@ -331,9 +324,9 @@ class PublishRuntime:
 
         # Determine registry and credentials
         # CLI options take precedence over metadata
-        target_registry_url = options.get('image_url') or metadata.registry_url
-        target_username = options.get('image_username') or metadata.registry_username
-        target_password = options.get('image_password') or metadata.registry_password
+        target_registry_url = options.get("image_url") or metadata.registry_url
+        target_username = options.get("image_username") or metadata.registry_username
+        target_password = options.get("image_password") or metadata.registry_password
 
         final_image_to_deploy = ""
 
@@ -346,7 +339,7 @@ class PublishRuntime:
                 image_name=local_image_name,
                 registry_url=target_registry_url,
                 username=target_username,
-                password=target_password
+                password=target_password,
             )
             final_image_to_deploy = push_result["pushed_image"]
 
@@ -355,7 +348,7 @@ class PublishRuntime:
         else:
             # No registry specified, expect a pre-built image URL for deployment
             # Check if options explicitly provided an image_url which is to be used directly
-            final_image_to_deploy = options.get('image_url')
+            final_image_to_deploy = options.get("image_url")
 
             if not final_image_to_deploy:
                 raise ValueError(
@@ -363,16 +356,14 @@ class PublishRuntime:
                     "Please provide an image URL via --image-url for direct deployment."
                 )
             if self.verbose:
-                logger.info(f"Using pre-existing image for deployment: {final_image_to_deploy}")
-
+                logger.info(
+                    f"Using pre-existing image for deployment: {final_image_to_deploy}"
+                )
 
         return final_image_to_deploy
 
     def _prepare_cloud_image(
-        self,
-        workspace_path: Path,
-        metadata,
-        options: Dict[str, Any]
+        self, workspace_path: Path, metadata, options: Dict[str, Any]
     ) -> str:
         """Prepare cloud-built image for publishing."""
         if self.verbose:
@@ -387,12 +378,14 @@ class PublishRuntime:
 
         return cloud_image_url
 
-    def _update_publish_metadata(self, workspace_path: Path, agent_info: Dict[str, Any]) -> None:
+    def _update_publish_metadata(
+        self, workspace_path: Path, agent_info: Dict[str, Any]
+    ) -> None:
         """Update metadata with publish information."""
         updates = {
             "agent_id": agent_info["agent_id"],
             "agent_endpoint": agent_info["agent_endpoint"],
-            "version": agent_info.get("version", "latest")
+            "version": agent_info.get("version", "latest"),
         }
 
         self.metadata_service.update_metadata(workspace_path, updates)

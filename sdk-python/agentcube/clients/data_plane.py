@@ -1,18 +1,18 @@
+import ast
 import base64
 import json
-import time
 import os
-import ast
 import shlex
-from typing import Dict, Optional, Any, List, Union
+import time
+from typing import Any, Dict, List, Optional, Union
 from urllib.parse import urljoin
 
-import requests
 import jwt
+import requests
+from agentcube.exceptions import CommandExecutionError
+from agentcube.utils.log import get_logger
 from cryptography.hazmat.primitives.asymmetric import rsa
 
-from agentcube.utils.log import get_logger
-from agentcube.exceptions import CommandExecutionError
 
 class DataPlaneClient:
     """Client for AgentCube Data Plane (Router -> PicoD).
@@ -27,7 +27,7 @@ class DataPlaneClient:
         namespace: Optional[str] = None,
         cr_name: Optional[str] = None,
         base_url: Optional[str] = None,
-        timeout: int = 30
+        timeout: int = 30,
     ):
         """Initialize Data Plane client.
 
@@ -44,24 +44,26 @@ class DataPlaneClient:
         self.private_key = private_key
         self.timeout = timeout
         self.logger = get_logger(f"{__name__}.DataPlaneClient")
-        
+
         if base_url:
             self.base_url = base_url
-            self.cr_name = cr_name # Might be None, but that's fine if base_url is used
+            self.cr_name = cr_name  # Might be None, but that's fine if base_url is used
         elif router_url and namespace and cr_name:
             self.cr_name = cr_name
             # Construct the base invocation URL
             # Router path: /v1/namespaces/{namespace}/code-interpreters/{name}/invocations
-            base_path = f"/v1/namespaces/{namespace}/code-interpreters/{cr_name}/invocations/"
+            base_path = (
+                f"/v1/namespaces/{namespace}/code-interpreters/{cr_name}/invocations/"
+            )
             self.base_url = urljoin(router_url, base_path)
         else:
-            raise ValueError("Either 'base_url' or all of 'router_url', 'namespace', 'cr_name' must be provided.")
-        
+            raise ValueError(
+                "Either 'base_url' or all of 'router_url', 'namespace', 'cr_name' must be provided."
+            )
+
         self.session = requests.Session()
         # Add the routing header
-        self.session.headers.update({
-            "x-agentcube-session-id": self.session_id
-        })
+        self.session.headers.update({"x-agentcube-session-id": self.session_id})
 
     def _create_jwt(self, payload_extra: Dict[str, Any] = None) -> str:
         """Create a signed JWT for authentication."""
@@ -69,28 +71,26 @@ class DataPlaneClient:
         claims = {
             "iss": "sdk-client",
             "iat": now,
-            "exp": now + 300, # 5 mins expiry
+            "exp": now + 300,  # 5 mins expiry
         }
         if payload_extra:
             claims.update(payload_extra)
-            
-        return jwt.encode(
-            payload=claims,
-            key=self.private_key,
-            algorithm="RS256"
-        )
 
-    def _request(self, method: str, endpoint: str, body: bytes = None, **kwargs) -> requests.Response:
+        return jwt.encode(payload=claims, key=self.private_key, algorithm="RS256")
+
+    def _request(
+        self, method: str, endpoint: str, body: bytes = None, **kwargs
+    ) -> requests.Response:
         """Make an authenticated request to the Data Plane."""
         url = urljoin(self.base_url, endpoint)
-        
+
         headers = {}
         if body:
             headers["Content-Type"] = "application/json"
 
         token = self._create_jwt()
         headers["Authorization"] = f"Bearer {token}"
-        
+
         # Merge headers
         req_headers = self.session.headers.copy()
         req_headers.update(headers)
@@ -98,52 +98,57 @@ class DataPlaneClient:
             req_headers.update(kwargs.pop("headers"))
 
         self.logger.debug(f"{method} {url}")
-        
+
         return requests.request(
-            method=method,
-            url=url,
-            data=body,
-            headers=req_headers,
-            **kwargs
+            method=method, url=url, data=body, headers=req_headers, **kwargs
         )
 
-    def execute_command(self, command: Union[str, List[str]], timeout: Optional[float] = None) -> str:
+    def execute_command(
+        self, command: Union[str, List[str]], timeout: Optional[float] = None
+    ) -> str:
         """Execute a shell command.
-        
+
         Args:
             command: The command to execute, either as a single string or a list of arguments.
             timeout: Optional timeout for the command execution.
         """
         # Convert timeout to string with 's' suffix as expected by PicoD
         timeout_value = timeout or self.timeout
-        timeout_str = f"{timeout_value}s" if isinstance(timeout_value, (int, float)) else str(timeout_value)
+        timeout_str = (
+            f"{timeout_value}s"
+            if isinstance(timeout_value, (int, float))
+            else str(timeout_value)
+        )
 
-        cmd_list = shlex.split(command, posix=True) if isinstance(command, str) else command
+        cmd_list = (
+            shlex.split(command, posix=True) if isinstance(command, str) else command
+        )
 
-        payload = {
-            "command": cmd_list,
-            "timeout": timeout_str
-        }
-        body = json.dumps(payload).encode('utf-8')
-        
+        payload = {"command": cmd_list, "timeout": timeout_str}
+        body = json.dumps(payload).encode("utf-8")
+
         # Add a buffer to the read timeout to allow PicoD to return the timeout response
         # otherwise requests might raise ReadTimeout before we get the JSON response with exit_code 124
-        read_timeout = timeout_value + 2.0 if isinstance(timeout_value, (int, float)) else timeout_value
-        
+        read_timeout = (
+            timeout_value + 2.0
+            if isinstance(timeout_value, (int, float))
+            else timeout_value
+        )
+
         resp = self._request("POST", "api/execute", body=body, timeout=read_timeout)
         resp.raise_for_status()
-        
+
         result = resp.json()
         if result["exit_code"] != 0:
-             raise CommandExecutionError(
-                 exit_code=result["exit_code"],
-                 stderr=result["stderr"],
-                 command=command
-             )
-        
+            raise CommandExecutionError(
+                exit_code=result["exit_code"], stderr=result["stderr"], command=command
+            )
+
         return result["stdout"]
 
-    def run_code(self, language: str, code: str, timeout: Optional[float] = None) -> str:
+    def run_code(
+        self, language: str, code: str, timeout: Optional[float] = None
+    ) -> str:
         """Run a code snippet (python or bash)."""
         lang = language.lower()
         if lang in ["python", "py", "python3"]:
@@ -157,7 +162,9 @@ class DataPlaneClient:
                 try:
                     ast.parse(fixed_code)
                     # If fixed code is valid, use it
-                    self.logger.warning("Detected and fixed double-escaped newlines in Python code.")
+                    self.logger.warning(
+                        "Detected and fixed double-escaped newlines in Python code."
+                    )
                     code = fixed_code
                 except SyntaxError:
                     # If still invalid, stick to original to preserve user intent/error
@@ -177,21 +184,17 @@ class DataPlaneClient:
             cmd = ["bash", filename]
         else:
             raise ValueError(f"Unsupported language: {language}")
-            
+
         return self.execute_command(cmd, timeout)
 
     def write_file(self, content: str, remote_path: str) -> None:
         """Write text content to a file."""
-        content_bytes = content.encode('utf-8')
-        content_b64 = base64.b64encode(content_bytes).decode('utf-8')
-        
-        payload = {
-            "path": remote_path,
-            "content": content_b64,
-            "mode": "0644"
-        }
-        body = json.dumps(payload).encode('utf-8')
-        
+        content_bytes = content.encode("utf-8")
+        content_b64 = base64.b64encode(content_bytes).decode("utf-8")
+
+        payload = {"path": remote_path, "content": content_b64, "mode": "0644"}
+        body = json.dumps(payload).encode("utf-8")
+
         resp = self._request("POST", "api/files", body=body)
         resp.raise_for_status()
 
@@ -199,29 +202,31 @@ class DataPlaneClient:
         """Upload a local file using multipart/form-data."""
         if not os.path.exists(local_path):
             raise FileNotFoundError(f"Local file not found: {local_path}")
-            
-        with open(local_path, 'rb') as f:
-            files = {'file': f}
-            data = {'path': remote_path, 'mode': '0644'}
-            
+
+        with open(local_path, "rb") as f:
+            files = {"file": f}
+            data = {"path": remote_path, "mode": "0644"}
+
             # Note: For multipart, we typically don't hash the body for JWT in this simple client
-            # unless strictly required by server. PicoD server logic usually checks body_sha256 
+            # unless strictly required by server. PicoD server logic usually checks body_sha256
             # if body is raw, but for multipart it might skip or handle differently.
             # Looking at previous PicoDClient, it skipped body_sha256 for multipart.
-            
+
             # We use _request but we need to bypass the body hashing logic and let requests handle multipart
             # So we construct headers manually here or modify _request.
             # Easier to just do specific logic here.
-            
+
             url = urljoin(self.base_url, "api/files")
-            token = self._create_jwt() # No body hash
+            token = self._create_jwt()  # No body hash
             headers = {
                 "Authorization": f"Bearer {token}",
-                "x-agentcube-session-id": self.session_id
+                "x-agentcube-session-id": self.session_id,
             }
-            
+
             self.logger.debug(f"Uploading file {local_path} to {remote_path}")
-            resp = self.session.post(url, files=files, data=data, headers=headers, timeout=self.timeout)
+            resp = self.session.post(
+                url, files=files, data=data, headers=headers, timeout=self.timeout
+            )
             resp.raise_for_status()
 
     def download_file(self, remote_path: str, local_path: str) -> None:
@@ -230,10 +235,10 @@ class DataPlaneClient:
         clean_path = remote_path.lstrip("/")
         resp = self._request("GET", f"api/files/{clean_path}", stream=True)
         resp.raise_for_status()
-        
+
         if os.path.dirname(local_path):
             os.makedirs(os.path.dirname(local_path), exist_ok=True)
-        with open(local_path, 'wb') as f:
+        with open(local_path, "wb") as f:
             for chunk in resp.iter_content(chunk_size=8192):
                 f.write(chunk)
 

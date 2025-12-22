@@ -5,22 +5,22 @@ This module defines the command-line interface using Typer, providing
 a rich and developer-friendly experience for managing AI agents.
 """
 
-from pathlib import Path
-from typing import Optional, List
+import warnings
 from dataclasses import asdict
+from pathlib import Path
+from typing import List, Optional
 
 import typer
-from rich.console import Console
-from rich.progress import Progress, SpinnerColumn, TextColumn
-from rich.table import Table
-
 from agentcube.models.pack_models import MetadataOptions
 from agentcube.runtime.build_runtime import BuildRuntime
 from agentcube.runtime.invoke_runtime import InvokeRuntime
 from agentcube.runtime.pack_runtime import PackRuntime
 from agentcube.runtime.publish_runtime import PublishRuntime
 from agentcube.runtime.status_runtime import StatusRuntime
-import warnings
+from rich.console import Console
+from rich.progress import Progress, SpinnerColumn, TextColumn
+from rich.table import Table
+
 warnings.filterwarnings("ignore")
 
 # Initialize rich console for beautiful output
@@ -35,21 +35,28 @@ app = typer.Typer(
     add_completion=False,
 )
 
+
 # Version callback
 def version_callback(value: bool) -> None:
     """Show version information and exit."""
     if value:
         from agentcube import __version__
-        console.print(f"AgentCube CLI (kubectl agentcube) version: [bold green]{__version__}[/bold green]")
+
+        console.print(
+            f"AgentCube CLI (kubectl agentcube) version: [bold green]{__version__}[/bold green]"
+        )
         raise typer.Exit()
 
-# Error handling  
+
+# Error handling
 def _handle_error(e: Exception, command_name: str, verbose: bool):
     console.print(f"Error {command_name}: [red]{str(e)}[/red]")
     if verbose:
         import traceback
+
         console.print(traceback.format_exc())
     raise typer.Exit(1)
+
 
 @app.callback()
 def main(
@@ -71,7 +78,9 @@ def main(
     # Set global verbosity level
     if verbose:
         import logging
+
         logging.basicConfig(level=logging.DEBUG)
+
 
 @app.command()
 def pack(
@@ -150,17 +159,20 @@ def pack(
             )
             options = {k: v for k, v in asdict(pack_options).items() if v is not None}
             if output:
-                options['output'] = output
+                options["output"] = output
 
             result = runtime.pack(workspace_path, **options)
 
             progress.update(task, description="Packaging completed!")
 
-        console.print(f"Successfully packaged agent: [bold green]{result['agent_name']}[/bold green]")
+        console.print(
+            f"Successfully packaged agent: [bold green]{result['agent_name']}[/bold green]"
+        )
         console.print(f"Workspace: [blue]{result['workspace_path']}[/blue]")
         console.print(f"Metadata: [blue]{result['metadata_path']}[/blue]")
     except Exception as e:
         _handle_error(e, "packaging agent", verbose)
+
 
 @app.command()
 def build(
@@ -223,11 +235,14 @@ def build(
 
             progress.update(task, description="Build completed!")
 
-        console.print(f"Successfully built agent image: [bold green]{result['image_name']}[/bold green]")
+        console.print(
+            f"Successfully built agent image: [bold green]{result['image_name']}[/bold green]"
+        )
         console.print(f"Tag: [blue]{result['image_tag']}[/blue]")
         console.print(f"Size: [blue]{result['image_size']}[/blue]")
     except Exception as e:
         _handle_error(e, "building agent", verbose)
+
 
 @app.command()
 def publish(
@@ -324,7 +339,7 @@ def publish(
                 "description": description,
                 "region": region,
                 "cloud_provider": cloud_provider,
-                "provider": provider, # Pass provider down
+                "provider": provider,  # Pass provider down
                 "node_port": node_port,
                 "replicas": replicas,
                 "namespace": namespace,
@@ -337,20 +352,27 @@ def publish(
 
             progress.update(task, description="Publishing completed!")
 
-        console.print(f"Successfully published agent: [bold green]{result['agent_name']}[/bold green]")
+        console.print(
+            f"Successfully published agent: [bold green]{result['agent_name']}[/bold green]"
+        )
         console.print(f"Agent ID: [blue]{result['agent_id']}[/blue]")
         if "agent_endpoint" in result:
             console.print(f"Endpoint: [blue]{result['agent_endpoint']}[/blue]")
 
         if provider == "agentcube" or provider == "k8s":
-            console.print(f"Namespace: [blue]{result.get('namespace', 'default')}[/blue]")
+            console.print(
+                f"Namespace: [blue]{result.get('namespace', 'default')}[/blue]"
+            )
             if "status" in result:
-                 console.print(f"Status: [blue]{result['status']}[/blue]")
-            if "node_port" in result: # For standard K8s provider if it returns node_port
+                console.print(f"Status: [blue]{result['status']}[/blue]")
+            if (
+                "node_port" in result
+            ):  # For standard K8s provider if it returns node_port
                 console.print(f"NodePort: [blue]{result['node_port']}[/blue]")
 
     except Exception as e:
         _handle_error(e, "publishing agent", verbose)
+
 
 @app.command()
 def invoke(
@@ -401,6 +423,7 @@ def invoke(
 
             # Parse payload
             import json
+
             try:
                 payload_data = json.loads(payload)
             except json.JSONDecodeError:
@@ -411,13 +434,17 @@ def invoke(
             headers = {}
             if header_list:
                 for h in header_list:
-                    parts = h.split(':', 1)
+                    parts = h.split(":", 1)
                     if len(parts) != 2:
-                        console.print(f"Invalid header format: [red]{h}[/red]. Expected 'key:value'.")
+                        console.print(
+                            f"Invalid header format: [red]{h}[/red]. Expected 'key:value'."
+                        )
                         raise typer.Exit(1)
                     key, value = parts
                     if not key.strip():
-                        console.print(f"Invalid header key in [red]{h}[/red]. Header key cannot be empty.")
+                        console.print(
+                            f"Invalid header key in [red]{h}[/red]. Header key cannot be empty."
+                        )
                         raise typer.Exit(1)
                     headers[key.strip()] = value.strip()
 
@@ -430,6 +457,7 @@ def invoke(
 
     except Exception as e:
         _handle_error(e, "invoking agent", verbose)
+
 
 @app.command()
 def status(
@@ -504,20 +532,23 @@ def status(
                 replicas = k8s_info["replicas"]
                 table.add_row(
                     "Replicas",
-                    f"{replicas.get('ready', 0)}/{replicas.get('desired', 0)}"
+                    f"{replicas.get('ready', 0)}/{replicas.get('desired', 0)}",
                 )
 
             if "pods" in k8s_info:
-                pods_status = ", ".join([
-                    f"{pod['name']}: {pod['phase']}"
-                    for pod in k8s_info["pods"][:3]  # Show first 3 pods
-                ])
+                pods_status = ", ".join(
+                    [
+                        f"{pod['name']}: {pod['phase']}"
+                        for pod in k8s_info["pods"][:3]  # Show first 3 pods
+                    ]
+                )
                 table.add_row("Pods", pods_status)
 
         console.print(table)
 
     except Exception as e:
         _handle_error(e, "checking status", verbose)
+
 
 if __name__ == "__main__":
     app()

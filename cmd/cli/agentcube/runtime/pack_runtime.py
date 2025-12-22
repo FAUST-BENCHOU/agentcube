@@ -29,11 +29,7 @@ class PackRuntime:
         if verbose:
             logging.basicConfig(level=logging.DEBUG)
 
-    def pack(
-        self,
-        workspace_path: Path,
-        **options: Any
-    ) -> Dict[str, Any]:
+    def pack(self, workspace_path: Path, **options: Any) -> Dict[str, Any]:
         """
         Package an agent application into a standardized workspace.
 
@@ -73,7 +69,9 @@ class PackRuntime:
         self._update_pack_metadata(workspace_path, metadata, dockerfile_path)
 
         # Step 8: Prepare output path if specified
-        final_workspace = self._prepare_output_path(workspace_path, options.get('output'))
+        final_workspace = self._prepare_output_path(
+            workspace_path, options.get("output")
+        )
 
         result = {
             "agent_name": metadata.agent_name,
@@ -100,7 +98,9 @@ class PackRuntime:
         if self.verbose:
             logger.debug(f"Workspace structure validation passed: {workspace_path}")
 
-    def _load_or_create_metadata(self, workspace_path: Path, options: Dict[str, Any]) -> AgentMetadata:
+    def _load_or_create_metadata(
+        self, workspace_path: Path, options: Dict[str, Any]
+    ) -> AgentMetadata:
         """Load existing metadata or create new one from options."""
         try:
             metadata = self.metadata_service.load_metadata(workspace_path)
@@ -114,31 +114,34 @@ class PackRuntime:
 
             if not pack_options.agent_name:
                 pack_options.agent_name = workspace_path.name
-            
+
             if not pack_options.language:
                 pack_options.language = "python"
 
             if not pack_options.entrypoint:
-                pack_options.entrypoint = self._infer_entrypoint(workspace_path, pack_options.language)
+                pack_options.entrypoint = self._infer_entrypoint(
+                    workspace_path, pack_options.language
+                )
 
-            if pack_options.language == 'python' and not pack_options.requirements_file:
+            if pack_options.language == "python" and not pack_options.requirements_file:
                 pack_options.requirements_file = "requirements.txt"
 
             metadata_dict = asdict(pack_options)
-            
+
             # Filter out None values so that pydantic model can use defaults
             metadata_dict = {k: v for k, v in metadata_dict.items() if v is not None}
-
 
             metadata = AgentMetadata(**metadata_dict)
             self.metadata_service.save_metadata(workspace_path, metadata)
 
         return metadata
 
-    def _apply_option_overrides(self, metadata: AgentMetadata, options: Dict[str, Any]) -> AgentMetadata:
+    def _apply_option_overrides(
+        self, metadata: AgentMetadata, options: Dict[str, Any]
+    ) -> AgentMetadata:
         """Apply CLI option overrides to metadata."""
         override_options = MetadataOptions.from_options(options)
-        
+
         # Create a dictionary from the dataclass, excluding None values
         overrides = {k: v for k, v in asdict(override_options).items() if v is not None}
 
@@ -153,11 +156,13 @@ class PackRuntime:
 
         return metadata
 
-    def _validate_language_compatibility(self, workspace_path: Path, metadata: AgentMetadata) -> None:
+    def _validate_language_compatibility(
+        self, workspace_path: Path, metadata: AgentMetadata
+    ) -> None:
         """Validate language-specific compatibility."""
-        if metadata.language == 'python':
+        if metadata.language == "python":
             self._validate_python_compatibility(workspace_path)
-        elif metadata.language == 'java':
+        elif metadata.language == "java":
             self._validate_java_compatibility(workspace_path)
         else:
             raise ValueError(f"Unsupported language: {metadata.language}")
@@ -182,11 +187,13 @@ class PackRuntime:
         if not pom_file.exists():
             raise ValueError("Java projects require a pom.xml file")
 
-    def _process_dependencies(self, workspace_path: Path, metadata: AgentMetadata) -> None:
+    def _process_dependencies(
+        self, workspace_path: Path, metadata: AgentMetadata
+    ) -> None:
         """Process and validate dependencies."""
-        if metadata.language == 'python':
+        if metadata.language == "python":
             self._process_python_dependencies(workspace_path)
-        elif metadata.language == 'java':
+        elif metadata.language == "java":
             self._process_java_dependencies(workspace_path)
 
     def _process_python_dependencies(self, workspace_path: Path) -> None:
@@ -198,7 +205,7 @@ class PackRuntime:
 
             # Basic validation of requirements.txt
             try:
-                with open(requirements_file, 'r') as f:
+                with open(requirements_file, "r") as f:
                     content = f.read().strip()
                     if not content:
                         logger.warning("requirements.txt is empty")
@@ -211,9 +218,11 @@ class PackRuntime:
         if self.verbose:
             logger.debug("Java dependencies will be processed by Maven during build")
 
-    def _generate_dockerfile(self, workspace_path: Path, metadata: AgentMetadata) -> Optional[Path]:
+    def _generate_dockerfile(
+        self, workspace_path: Path, metadata: AgentMetadata
+    ) -> Optional[Path]:
         """Generate Dockerfile for the agent."""
-        if metadata.build_mode == 'cloud':
+        if metadata.build_mode == "cloud":
             # For cloud build, we still need a Dockerfile
             pass
 
@@ -226,14 +235,16 @@ class PackRuntime:
             return dockerfile_path
 
         # Generate Dockerfile based on language
-        if metadata.language == 'python':
+        if metadata.language == "python":
             dockerfile_content = self._generate_python_dockerfile(metadata)
-        elif metadata.language == 'java':
+        elif metadata.language == "java":
             dockerfile_content = self._generate_java_dockerfile(metadata)
         else:
-            raise ValueError(f"Unsupported language for Dockerfile generation: {metadata.language}")
+            raise ValueError(
+                f"Unsupported language for Dockerfile generation: {metadata.language}"
+            )
 
-        with open(dockerfile_path, 'w') as f:
+        with open(dockerfile_path, "w") as f:
             f.write(dockerfile_content)
 
         if self.verbose:
@@ -309,7 +320,12 @@ EXPOSE {metadata.port}
 CMD ["java", "-jar", "app.jar"]
 """
 
-    def _update_pack_metadata(self, workspace_path: Path, metadata: AgentMetadata, dockerfile_path: Optional[Path]) -> None:
+    def _update_pack_metadata(
+        self,
+        workspace_path: Path,
+        metadata: AgentMetadata,
+        dockerfile_path: Optional[Path],
+    ) -> None:
         """Update metadata with pack-related information."""
         updates = {}
 
@@ -319,7 +335,9 @@ CMD ["java", "-jar", "app.jar"]
         if updates:
             self.metadata_service.update_metadata(workspace_path, updates)
 
-    def _prepare_output_path(self, workspace_path: Path, output_path: Optional[str]) -> Path:
+    def _prepare_output_path(
+        self, workspace_path: Path, output_path: Optional[str]
+    ) -> Path:
         """Prepare the output path for the packaged workspace."""
         if output_path:
             output = Path(output_path).resolve()
@@ -333,7 +351,12 @@ CMD ["java", "-jar", "app.jar"]
                     logger.debug(f"Copying workspace from {workspace_path} to {output}")
 
                 # Copy workspace contents. This will overwrite existing files.
-                shutil.copytree(workspace_path, output, ignore=shutil.ignore_patterns('.git', '__pycache__'), dirs_exist_ok=True)
+                shutil.copytree(
+                    workspace_path,
+                    output,
+                    ignore=shutil.ignore_patterns(".git", "__pycache__"),
+                    dirs_exist_ok=True,
+                )
 
                 return output
 
@@ -341,13 +364,13 @@ CMD ["java", "-jar", "app.jar"]
 
     def _infer_entrypoint(self, workspace_path: Path, language: str) -> str:
         """Infer entrypoint from workspace files."""
-        if language == 'python':
+        if language == "python":
             # Look for common Python entry points
             for entrypoint in ["main.py", "app.py", "run.py"]:
                 if (workspace_path / entrypoint).exists():
                     return f"python {entrypoint}"
             return "python main.py"  # Default
-        elif language == 'java':
+        elif language == "java":
             # For Java, we'll use Maven to run
             return "mvn spring-boot:run"  # Default for Spring Boot
         else:

@@ -5,10 +5,10 @@ Hello Agent - A simple example AI agent.
 This agent provides a basic HTTP API for greeting users.
 """
 
-import os
-from http.server import HTTPServer, BaseHTTPRequestHandler
 import json
-from typing import Dict, Any
+import os
+from http.server import BaseHTTPRequestHandler, HTTPServer
+from typing import Any, Dict
 
 from agentcube import CodeInterpreterClient
 
@@ -18,28 +18,30 @@ class HelloAgentHandler(BaseHTTPRequestHandler):
 
     def do_GET(self):
         """Handle GET requests."""
-        if self.path == '/health':
+        if self.path == "/health":
             self._send_json_response({"status": "healthy", "agent": "hello-agent"})
-        elif self.path == '/':
-            self._send_json_response({
-                "message": "Hello from Hello Agent!",
-                "endpoints": [
-                    "GET /health - Health check",
-                    "POST /greet - Greet someone",
-                    "POST /runcmd - Execute command using CodeInterpreterClient",
-                    "GET / - Agent information"
-                ]
-            })
+        elif self.path == "/":
+            self._send_json_response(
+                {
+                    "message": "Hello from Hello Agent!",
+                    "endpoints": [
+                        "GET /health - Health check",
+                        "POST /greet - Greet someone",
+                        "POST /runcmd - Execute command using CodeInterpreterClient",
+                        "GET / - Agent information",
+                    ],
+                }
+            )
         else:
             self._send_error(404, "Endpoint not found")
 
     def do_POST(self):
         """Handle POST requests."""
-        if self.path == '/greet':
+        if self.path == "/greet":
             self._handle_greet()
-        elif self.path == '/runcmd':
+        elif self.path == "/runcmd":
             self._handle_runcmd()
-        elif self.path == '/':
+        elif self.path == "/":
             self._handle_runcmd()
         else:
             self._send_error(404, "Endpoint not found")
@@ -47,28 +49,28 @@ class HelloAgentHandler(BaseHTTPRequestHandler):
     def _handle_greet(self):
         """Handle greeting requests."""
         try:
-            content_length = int(self.headers['Content-Length'])
+            content_length = int(self.headers["Content-Length"])
             post_data = self.rfile.read(content_length)
-            data = json.loads(post_data.decode('utf-8'))
+            data = json.loads(post_data.decode("utf-8"))
 
-            name = data.get('name', 'World')
-            language = data.get('language', 'en')
+            name = data.get("name", "World")
+            language = data.get("language", "en")
 
             greetings = {
-                'en': f"Hello, {name}!",
-                'es': f"¡Hola, {name}!",
-                'fr': f"Bonjour, {name}!",
-                'zh': f"你好, {name}!",
-                'ja': f"こんにちは, {name}!"
+                "en": f"Hello, {name}!",
+                "es": f"¡Hola, {name}!",
+                "fr": f"Bonjour, {name}!",
+                "zh": f"你好, {name}!",
+                "ja": f"こんにちは, {name}!",
             }
 
-            greeting = greetings.get(language, greetings['en'])
+            greeting = greetings.get(language, greetings["en"])
 
             response = {
                 "greeting": greeting,
                 "name": name,
                 "language": language,
-                "agent": "hello-agent"
+                "agent": "hello-agent",
             }
 
             self._send_json_response(response)
@@ -80,12 +82,12 @@ class HelloAgentHandler(BaseHTTPRequestHandler):
         """Handle general invocation requests."""
         try:
 
-            content_length = int(self.headers['Content-Length'])
+            content_length = int(self.headers["Content-Length"])
             post_data = self.rfile.read(content_length)
-            data = json.loads(post_data.decode('utf-8'))
+            data = json.loads(post_data.decode("utf-8"))
 
             # Handle different types of prompts
-            prompt = data.get('prompt', '')
+            prompt = data.get("prompt", "")
             if not prompt:
                 self._send_error(400, "Prompt is required")
                 return
@@ -94,7 +96,7 @@ class HelloAgentHandler(BaseHTTPRequestHandler):
                 "response": f"Hello Agent received: {prompt}",
                 "agent": "hello-agent",
                 "timestamp": self._get_timestamp(),
-                "original_prompt": prompt
+                "original_prompt": prompt,
             }
 
             self._send_json_response(response_data)
@@ -107,13 +109,17 @@ class HelloAgentHandler(BaseHTTPRequestHandler):
         try:
 
             code_interpreter = CodeInterpreterClient()
-            code_interpreter.run_code("python","print('Hello from CodeInterpreterClient Python!')")
-            output = code_interpreter.execute_command("echo 'Hello from CodeInterpreterClient Shell!'")
+            code_interpreter.run_code(
+                "python", "print('Hello from CodeInterpreterClient Python!')"
+            )
+            output = code_interpreter.execute_command(
+                "echo 'Hello from CodeInterpreterClient Shell!'"
+            )
 
             response_data = {
                 "output": output,
                 "agent": "hello-agent",
-                "timestamp": self._get_timestamp()
+                "timestamp": self._get_timestamp(),
             }
 
             self._send_json_response(response_data)
@@ -124,29 +130,29 @@ class HelloAgentHandler(BaseHTTPRequestHandler):
     def _send_json_response(self, data: Dict[str, Any], status_code: int = 200):
         """Send JSON response."""
         self.send_response(status_code)
-        self.send_header('Content-type', 'application/json')
-        self.send_header('Access-Control-Allow-Origin', '*')
+        self.send_header("Content-type", "application/json")
+        self.send_header("Access-Control-Allow-Origin", "*")
         self.end_headers()
 
         response = json.dumps(data, indent=2)
-        self.wfile.write(response.encode('utf-8'))
+        self.wfile.write(response.encode("utf-8"))
 
     def _send_error(self, status_code: int, message: str):
         """Send error response."""
         self.send_response(status_code)
-        self.send_header('Content-type', 'application/json')
+        self.send_header("Content-type", "application/json")
         self.end_headers()
 
-        error_response = json.dumps({
-            "error": message,
-            "status_code": status_code
-        }, indent=2)
+        error_response = json.dumps(
+            {"error": message, "status_code": status_code}, indent=2
+        )
 
-        self.wfile.write(error_response.encode('utf-8'))
+        self.wfile.write(error_response.encode("utf-8"))
 
     def _get_timestamp(self) -> str:
         """Get current timestamp."""
         from datetime import datetime
+
         return datetime.now().isoformat()
 
     def log_message(self, format, *args):
@@ -156,7 +162,7 @@ class HelloAgentHandler(BaseHTTPRequestHandler):
 
 def main():
     """Main function to run the Hello Agent."""
-    port = int(os.environ.get('PORT', 8080))
+    port = int(os.environ.get("PORT", 8080))
 
     print(f"Starting Hello Agent on port {port}")
     print(f"Health check: http://0.0.0.0:{port}/health")
@@ -164,7 +170,7 @@ def main():
     print(f"Runcmd endpoint: http://0.0.0.0:{port}/runcmd")
     print(f"Agent endpoint: http://0.0.0.0:{port}/")
 
-    server_address = ('', port)
+    server_address = ("", port)
     httpd = HTTPServer(server_address, HelloAgentHandler)
 
     try:
@@ -175,5 +181,5 @@ def main():
         httpd.server_close()
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     main()

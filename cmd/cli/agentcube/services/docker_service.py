@@ -11,7 +11,7 @@ from pathlib import Path
 from typing import Dict, Optional
 
 import docker
-from docker.errors import DockerException, BuildError, APIError
+from docker.errors import APIError, BuildError, DockerException
 
 logger = logging.getLogger(__name__)
 
@@ -57,7 +57,7 @@ class DockerService:
         context_path: Path,
         image_name: str,
         tag: str = "latest",
-        build_args: Optional[Dict[str, str]] = None
+        build_args: Optional[Dict[str, str]] = None,
     ) -> Dict[str, str]:
         """
         Build a Docker image using Docker SDK.
@@ -115,7 +115,7 @@ class DockerService:
                 "image_name": full_image_name,
                 "image_id": image_info.get("id", image.id),
                 "image_size": image_info.get("size", "Unknown"),
-                "build_time": f"{build_time:.1f}s"
+                "build_time": f"{build_time:.1f}s",
             }
 
             if self.verbose:
@@ -127,11 +127,11 @@ class DockerService:
             error_msg = f"Docker build failed: {e}"
             logger.error(error_msg)
             # Log build logs if available
-            if hasattr(e, 'build_log'):
+            if hasattr(e, "build_log"):
                 logger.error("Docker build logs:")
                 for line in e.build_log:
-                    if 'stream' in line:
-                        logger.error(line['stream'].strip())
+                    if "stream" in line:
+                        logger.error(line["stream"].strip())
             raise RuntimeError(error_msg)
         except APIError as e:
             error_msg = f"Docker API error during build: {e}"
@@ -153,7 +153,7 @@ class DockerService:
 
             return {
                 "id": image.id.split(":")[1][:12] if ":" in image.id else image.id[:12],
-                "size": self._format_size(image.attrs.get('Size', 0))
+                "size": self._format_size(image.attrs.get("Size", 0)),
             }
         except Exception as e:
             logger.warning(f"Failed to get image info for {image_name}: {e}")
@@ -164,7 +164,7 @@ class DockerService:
         if size_bytes == 0:
             return "Unknown"
 
-        for unit in ['B', 'KB', 'MB', 'GB']:
+        for unit in ["B", "KB", "MB", "GB"]:
             if size_bytes < 1024.0:
                 return f"{size_bytes:.1f}{unit}"
             size_bytes /= 1024.0
@@ -175,7 +175,7 @@ class DockerService:
         image_name: str,
         registry_url: Optional[str] = None,
         username: Optional[str] = None,
-        password: Optional[str] = None
+        password: Optional[str] = None,
     ) -> Dict[str, str]:
         """
         Push a Docker image to a registry using Docker SDK.
@@ -218,7 +218,9 @@ class DockerService:
             start_time = time.time()
 
             # Push the image
-            push_logs = self.client.images.push(full_image_name, stream=True, decode=True)
+            push_logs = self.client.images.push(
+                full_image_name, stream=True, decode=True
+            )
 
             # Process push logs
             for log_entry in push_logs:
@@ -239,10 +241,7 @@ class DockerService:
             if self.verbose:
                 logger.info(f"Docker image pushed successfully in {push_time:.1f}s")
 
-            return {
-                "pushed_image": full_image_name,
-                "push_time": f"{push_time:.1f}s"
-            }
+            return {"pushed_image": full_image_name, "push_time": f"{push_time:.1f}s"}
 
         except APIError as e:
             error_msg = f"Docker API error during push: {e}"
@@ -253,17 +252,16 @@ class DockerService:
             logger.error(error_msg)
             raise RuntimeError(error_msg)
 
-    def _docker_login_sdk(self, registry: Optional[str], username: str, password: str) -> None:
+    def _docker_login_sdk(
+        self, registry: Optional[str], username: str, password: str
+    ) -> None:
         """Login to Docker registry using SDK."""
         try:
             if self.verbose:
                 logger.info(f"Logging in to Docker registry: {registry or 'default'}")
 
             self.client.login(
-                username=username,
-                password=password,
-                registry=registry,
-                reauth=True
+                username=username, password=password, registry=registry, reauth=True
             )
 
             if self.verbose:

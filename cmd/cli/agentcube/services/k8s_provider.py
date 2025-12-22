@@ -6,9 +6,10 @@ exposing them via NodePort services for testing and development.
 """
 
 import logging
-import time
 import shlex
+import time
 from typing import Any, Dict, Optional
+
 from kubernetes import client, config
 from kubernetes.client.rest import ApiException
 
@@ -22,7 +23,7 @@ class KubernetesProvider:
         self,
         namespace: str = "default",
         verbose: bool = False,
-        kubeconfig: Optional[str] = None
+        kubeconfig: Optional[str] = None,
     ) -> None:
         """
         Initialize Kubernetes provider.
@@ -58,7 +59,9 @@ class KubernetesProvider:
             self.apps_api = client.AppsV1Api()
 
             if self.verbose:
-                logger.info(f"Kubernetes provider initialized for namespace: {namespace}")
+                logger.info(
+                    f"Kubernetes provider initialized for namespace: {namespace}"
+                )
 
         except Exception as e:
             raise RuntimeError(f"Failed to initialize Kubernetes client: {str(e)}")
@@ -92,7 +95,7 @@ class KubernetesProvider:
         entrypoint: Optional[str] = None,
         replicas: int = 1,
         node_port: Optional[int] = None,
-        env_vars: Optional[Dict[str, str]] = None
+        env_vars: Optional[Dict[str, str]] = None,
     ) -> Dict[str, Any]:
         """
         Deploy an agent to Kubernetes cluster.
@@ -126,14 +129,12 @@ class KubernetesProvider:
                 port=port,
                 entrypoint=entrypoint,
                 replicas=replicas,
-                env_vars=env_vars
+                env_vars=env_vars,
             )
 
             # Create or update Service
             service_info = self._create_service(
-                name=k8s_name,
-                port=port,
-                node_port=node_port
+                name=k8s_name, port=port, node_port=node_port
             )
 
             result = {
@@ -161,7 +162,7 @@ class KubernetesProvider:
         port: int,
         entrypoint: Optional[str],
         replicas: int,
-        env_vars: Optional[Dict[str, str]]
+        env_vars: Optional[Dict[str, str]],
     ) -> Dict[str, Any]:
         """Create or update a Kubernetes Deployment."""
         # Prepare container spec
@@ -188,20 +189,20 @@ class KubernetesProvider:
             command=container_command,
             args=container_args,
             env=env if env else None,
-            image_pull_policy="IfNotPresent"  # Use local images if available
+            image_pull_policy="IfNotPresent",  # Use local images if available
         )
 
         # Define pod template
         template = client.V1PodTemplateSpec(
             metadata=client.V1ObjectMeta(labels={"app": name}),
-            spec=client.V1PodSpec(containers=[container])
+            spec=client.V1PodSpec(containers=[container]),
         )
 
         # Define deployment spec
         spec = client.V1DeploymentSpec(
             replicas=replicas,
             selector=client.V1LabelSelector(match_labels={"app": name}),
-            template=template
+            template=template,
         )
 
         # Create deployment object
@@ -209,20 +210,17 @@ class KubernetesProvider:
             api_version="apps/v1",
             kind="Deployment",
             metadata=client.V1ObjectMeta(name=name, namespace=self.namespace),
-            spec=spec
+            spec=spec,
         )
 
         try:
             # Try to get existing deployment
             existing = self.apps_api.read_namespaced_deployment(
-                name=name,
-                namespace=self.namespace
+                name=name, namespace=self.namespace
             )
             # Update existing deployment
             self.apps_api.patch_namespaced_deployment(
-                name=name,
-                namespace=self.namespace,
-                body=deployment
+                name=name, namespace=self.namespace, body=deployment
             )
             if self.verbose:
                 logger.info(f"Updated existing deployment: {name}")
@@ -230,8 +228,7 @@ class KubernetesProvider:
             if e.status == 404:
                 # Create new deployment
                 self.apps_api.create_namespaced_deployment(
-                    namespace=self.namespace,
-                    body=deployment
+                    namespace=self.namespace, body=deployment
                 )
                 if self.verbose:
                     logger.info(f"Created new deployment: {name}")
@@ -241,10 +238,7 @@ class KubernetesProvider:
         return {"name": name, "replicas": replicas}
 
     def _create_service(
-        self,
-        name: str,
-        port: int,
-        node_port: Optional[int]
+        self, name: str, port: int, node_port: Optional[int]
     ) -> Dict[str, Any]:
         """Create or update a Kubernetes Service with NodePort."""
         # Define service spec
@@ -255,9 +249,9 @@ class KubernetesProvider:
                 client.V1ServicePort(
                     port=port,
                     target_port=port,
-                    node_port=node_port  # K8s will auto-assign if None
+                    node_port=node_port,  # K8s will auto-assign if None
                 )
-            ]
+            ],
         )
 
         # Create service object
@@ -265,20 +259,17 @@ class KubernetesProvider:
             api_version="v1",
             kind="Service",
             metadata=client.V1ObjectMeta(name=name, namespace=self.namespace),
-            spec=spec
+            spec=spec,
         )
 
         try:
             # Try to get existing service
             existing = self.core_api.read_namespaced_service(
-                name=name,
-                namespace=self.namespace
+                name=name, namespace=self.namespace
             )
             # Update existing service
             result = self.core_api.patch_namespaced_service(
-                name=name,
-                namespace=self.namespace,
-                body=service
+                name=name, namespace=self.namespace, body=service
             )
             if self.verbose:
                 logger.info(f"Updated existing service: {name}")
@@ -286,8 +277,7 @@ class KubernetesProvider:
             if e.status == 404:
                 # Create new service
                 result = self.core_api.create_namespaced_service(
-                    namespace=self.namespace,
-                    body=service
+                    namespace=self.namespace, body=service
                 )
                 if self.verbose:
                     logger.info(f"Created new service: {name}")
@@ -297,11 +287,7 @@ class KubernetesProvider:
         # Get the assigned NodePort
         actual_node_port = result.spec.ports[0].node_port
 
-        return {
-            "name": name,
-            "port": port,
-            "node_port": actual_node_port
-        }
+        return {"name": name, "port": port, "node_port": actual_node_port}
 
     def wait_for_deployment_ready(self, name: str, timeout: int = 120) -> None:
         """Wait for deployment to be ready."""
@@ -312,13 +298,14 @@ class KubernetesProvider:
         while time.time() - start_time < timeout:
             try:
                 deployment = self.apps_api.read_namespaced_deployment(
-                    name=name,
-                    namespace=self.namespace
+                    name=name, namespace=self.namespace
                 )
 
                 # Check if deployment is ready
-                if (deployment.status.ready_replicas is not None and
-                    deployment.status.ready_replicas >= deployment.spec.replicas):
+                if (
+                    deployment.status.ready_replicas is not None
+                    and deployment.status.ready_replicas >= deployment.spec.replicas
+                ):
                     if self.verbose:
                         logger.info(f"Deployment {name} is ready")
                     return
@@ -329,7 +316,9 @@ class KubernetesProvider:
                 logger.error(f"Error checking deployment status: {e}")
                 raise
 
-        raise TimeoutError(f"Deployment {name} did not become ready within {timeout} seconds")
+        raise TimeoutError(
+            f"Deployment {name} did not become ready within {timeout} seconds"
+        )
 
     def get_agent_status(self, agent_name: str) -> Dict[str, Any]:
         """
@@ -349,29 +338,30 @@ class KubernetesProvider:
         try:
             # Get deployment status
             deployment = self.apps_api.read_namespaced_deployment(
-                name=k8s_name,
-                namespace=self.namespace
+                name=k8s_name, namespace=self.namespace
             )
 
             # Get service info
             service = self.core_api.read_namespaced_service(
-                name=k8s_name,
-                namespace=self.namespace
+                name=k8s_name, namespace=self.namespace
             )
 
             # Get pod status
             pods = self.core_api.list_namespaced_pod(
-                namespace=self.namespace,
-                label_selector=f"app={k8s_name}"
+                namespace=self.namespace, label_selector=f"app={k8s_name}"
             )
 
             pod_statuses = []
             for pod in pods.items:
-                pod_statuses.append({
-                    "name": pod.metadata.name,
-                    "phase": pod.status.phase,
-                    "ready": all(cs.ready for cs in pod.status.container_statuses or [])
-                })
+                pod_statuses.append(
+                    {
+                        "name": pod.metadata.name,
+                        "phase": pod.status.phase,
+                        "ready": all(
+                            cs.ready for cs in pod.status.container_statuses or []
+                        ),
+                    }
+                )
 
             node_port = service.spec.ports[0].node_port
 
@@ -381,19 +371,23 @@ class KubernetesProvider:
                 "replicas": {
                     "desired": deployment.spec.replicas,
                     "ready": deployment.status.ready_replicas or 0,
-                    "available": deployment.status.available_replicas or 0
+                    "available": deployment.status.available_replicas or 0,
                 },
                 "service_url": f"http://localhost:{node_port}",
                 "node_port": node_port,
                 "pods": pod_statuses,
-                "status": "ready" if deployment.status.ready_replicas == deployment.spec.replicas else "not_ready"
+                "status": (
+                    "ready"
+                    if deployment.status.ready_replicas == deployment.spec.replicas
+                    else "not_ready"
+                ),
             }
 
         except ApiException as e:
             if e.status == 404:
                 return {
                     "status": "not_deployed",
-                    "message": f"Agent {agent_name} is not deployed to K8s cluster"
+                    "message": f"Agent {agent_name} is not deployed to K8s cluster",
                 }
             else:
                 raise RuntimeError(f"Failed to get agent status: {str(e)}")
@@ -420,8 +414,7 @@ class KubernetesProvider:
             # Delete deployment
             try:
                 self.apps_api.delete_namespaced_deployment(
-                    name=k8s_name,
-                    namespace=self.namespace
+                    name=k8s_name, namespace=self.namespace
                 )
                 if self.verbose:
                     logger.info(f"Deleted deployment: {k8s_name}")
@@ -432,8 +425,7 @@ class KubernetesProvider:
             # Delete service
             try:
                 self.core_api.delete_namespaced_service(
-                    name=k8s_name,
-                    namespace=self.namespace
+                    name=k8s_name, namespace=self.namespace
                 )
                 if self.verbose:
                     logger.info(f"Deleted service: {k8s_name}")
@@ -444,7 +436,7 @@ class KubernetesProvider:
             return {
                 "status": "deleted",
                 "deployment_name": k8s_name,
-                "namespace": self.namespace
+                "namespace": self.namespace,
             }
 
         except Exception as e:
