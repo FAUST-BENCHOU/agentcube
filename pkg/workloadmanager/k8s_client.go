@@ -29,6 +29,7 @@ import (
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/selection"
 	"k8s.io/client-go/dynamic"
 	"k8s.io/client-go/dynamic/dynamicinformer"
 	"k8s.io/client-go/informers"
@@ -118,7 +119,12 @@ func NewK8sClient() (*K8sClient, error) {
 	}
 
 	// Create informer factory for core resources (Pods, etc.)
-	informerFactory := informers.NewSharedInformerFactory(clientset, 0)
+	// Only cache pods that have the sandbox-name label to reduce memory usage
+	requirement, _ := labels.NewRequirement("sandbox-name", selection.Exists, []string{})
+	sandboxPodSelector := labels.NewSelector().Add(*requirement)
+	informerFactory := informers.NewFilteredSharedInformerFactory(clientset, 0, metav1.NamespaceAll, func(options *metav1.ListOptions) {
+		options.LabelSelector = sandboxPodSelector.String()
+	})
 
 	// Get pod informer and lister
 	podInformer := informerFactory.Core().V1().Pods().Informer()

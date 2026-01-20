@@ -28,10 +28,12 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
 	"k8s.io/client-go/kubernetes/scheme"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 	"k8s.io/klog/v2"
 	sandboxv1alpha1 "sigs.k8s.io/agent-sandbox/api/v1alpha1"
 	extensionsv1alpha1 "sigs.k8s.io/agent-sandbox/extensions/api/v1alpha1"
 	ctrl "sigs.k8s.io/controller-runtime"
+	"sigs.k8s.io/controller-runtime/pkg/cache"
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
 	metricsserver "sigs.k8s.io/controller-runtime/pkg/metrics/server"
 
@@ -68,9 +70,19 @@ func main() {
 
 	ctrl.SetLogger(zap.New(zap.UseDevMode(true)))
 
-	// Setup controller manager
+	// Setup controller manager with selective caching to reduce memory usage
+	// Only cache the CRDs we need: Sandbox, CodeInterpreter, and related resources
 	mgr, err := ctrl.NewManager(ctrl.GetConfigOrDie(), ctrl.Options{
 		Scheme: schemeBuilder,
+		Cache: cache.Options{
+			ByObject: map[client.Object]cache.ByObject{
+				&sandboxv1alpha1.Sandbox{}: {},
+				&runtimev1alpha1.CodeInterpreter{}: {},
+				&extensionsv1alpha1.SandboxTemplate{}: {},
+				&extensionsv1alpha1.SandboxWarmPool{}: {},
+				&extensionsv1alpha1.SandboxClaim{}: {},
+			},
+		},
 		Metrics: metricsserver.Options{
 			BindAddress: "0", // Disable metrics server
 		},
