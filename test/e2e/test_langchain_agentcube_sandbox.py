@@ -116,6 +116,7 @@ class TestLangchainAgentcubeSandboxE2E(unittest.TestCase):
             backend = AgentcubeSandbox(client=client)
             up = backend.upload_files([(remote_abs, marker)])
             self.assertIsNone(up[0].error, up[0])
+            self.assertEqual(up[0].path, f"lc_abs_{os.getpid()}.txt")
             dl = backend.download_files([remote_abs])
             self.assertIsNone(dl[0].error, dl[0])
             self.assertEqual(dl[0].content, marker)
